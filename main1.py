@@ -1,41 +1,37 @@
 import sys
-import subprocess
-import uuid
+import cpuinfo
+import psutil
 import hashlib
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QTextEdit, QGridLayout, QLineEdit
 
 
-def get_mac_address():
-    # 使用uuid获取MAC地址
-    mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0, 2 * 6, 8)][::-1])
-    return mac
+def get_cpu_info():
+    info = cpuinfo.get_cpu_info()
+    return info['brand_raw']  # 获取 CPU 型号作为部分指纹
 
 
-def get_cpu_serial():
-    # Windows系统下获取CPU序列号
-    command = "wmic cpu get ProcessorId"
-    return subprocess.check_output(command, shell=True).decode().split('\n')[1].strip()
-
-
-def get_disk_serial():
-    # Windows系统下获取硬盘序列号
-    command = "wmic diskdrive get SerialNumber"
-    return subprocess.check_output(command, shell=True).decode().split('\n')[1].strip()
-
-
-def get_baseboard_serial():
-    # Windows系统下获取主板序列号
-    command = "wmic baseboard get SerialNumber"
-    return subprocess.check_output(command, shell=True).decode().split('\n')[1].strip()
+def get_disk_info():
+    # 获取第一个磁盘的设备名
+    for disk in psutil.disk_partitions():
+        if 'fixed' in disk.opts:
+            return disk.device
+    return None
 
 
 def generate_fingerprint():
-    # 生成机器指纹
-    components = [get_mac_address(), get_cpu_serial(), get_disk_serial(), get_baseboard_serial()]
-    raw_fingerprint = ''.join(components)
-    return hashlib.sha256(raw_fingerprint.encode()).hexdigest()
+    # 组合获取的信息生成机器指纹
+    cpu_info = get_cpu_info()
+    disk_info = get_disk_info()
+    text_info = 'douyin'
+    if None in (cpu_info, disk_info, text_info):
+        raise ValueError("Failed to get all necessary hardware IDs.")
+
+    # 创建原始指纹字符串
+    raw_fingerprint = f"{cpu_info} | {disk_info} | {text_info}"
+    # 使用 SHA-256 哈希算法生成指纹
+    fingerprint = hashlib.sha256(raw_fingerprint.encode()).hexdigest()
+    return fingerprint
 
 
 class App(QWidget):
